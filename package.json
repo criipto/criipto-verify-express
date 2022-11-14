@@ -1,0 +1,42 @@
+{
+  "name": "@criipto/verify-express",
+  "version": "1.0.0",
+  "description": "Accept MitID, NemID, Swedish BankID, Norwegian BankID and more logins in your Node.js app using Passport or plain Express.js",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/criipto/criipto-verify-express.git"
+  },
+  "keywords": [
+    "criipto",
+    "verify",
+    "bankid",
+    "nemid",
+    "mitid",
+    "passport",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/criipto/criipto-verify-express/issues"
+  },
+  "homepage": "https://github.com/criipto/criipto-verify-express#readme",
+  "dependencies": {
+    "@criipto/oidc": "^1.2.1",
+    "debug": "^4.3.4",
+    "jose": "^4.8.3",
+    "node-fetch": "^2.6.7",
+    "passport-strategy": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node-fetch": "^2.6.2",
+    "@types/passport-strategy": "^0.2.35",
+    "typescript": "^4.7.4"
+  }
+}
