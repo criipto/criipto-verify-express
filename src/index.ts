@@ -51,19 +51,21 @@ export class CriiptoVerifyExpressJwt {
     this.configurationManager = new OpenIDConfigurationManager(`https://${options.domain}`, options.clientID, memoryStorage);
   }
 
+  async process(req: Request) {
+    const jwt = extractBearerToken(req);
+    if (!jwt) throw new Error('No bearer token found in request');
+    
+    const { payload } = await jwtVerify(jwt, this.jwks, {
+      issuer: `https://${this.options.domain}`,
+      audience: this.options.clientID,
+    });
+
+    return payload;
+  }
+
   middleware() {
     return (req: Request, res: Response, next: ((err?: Error) => {})) => {
-      Promise.resolve().then(async () => {
-        const jwt = extractBearerToken(req);
-        if (!jwt) throw new Error('No bearer token found in request');
-        
-        const { payload } = await jwtVerify(jwt, this.jwks, {
-          issuer: `https://${this.options.domain}`,
-          audience: this.options.clientID,
-        });
-
-        req.claims = payload;
-      }).then(() => {
+      this.process(req).then(() => {
         next();
       })
       .catch(err => {
@@ -77,35 +79,25 @@ export class CriiptoVerifyExpressJwt {
 export class CriiptoVerifyJwtPassportStrategy implements passport.Strategy  {
   options: CriiptoVerifyJwtOptions
   claimsToUser: (input: JWTPayload) => Express.User | Promise<Express.User>
-  jwks: ReturnType<typeof createRemoteJWKSet>
-  configurationManager: OpenIDConfigurationManager
+  helper: CriiptoVerifyExpressJwt
 
   constructor(options: CriiptoVerifyJwtOptions, claimsToUser: (input: JWTPayload) => Express.User | Promise<Express.User>) {
     this.options = options;
     this.claimsToUser = claimsToUser;
-    this.jwks = createRemoteJWKSet(new URL(`https://${options.domain}/.well-known/jwks`));
-    this.configurationManager = new OpenIDConfigurationManager(`https://${options.domain}`, options.clientID, memoryStorage);
+    this.helper = new CriiptoVerifyExpressJwt(options);
   }
 
   authenticate(
     this: passport.StrategyCreated<this, this & passport.StrategyCreatedStatic> & this,
     req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>
   ) {
-    Promise.resolve().then(async () => {
-      const jwt = extractBearerToken(req);
-      if (!jwt) throw new Error('No bearer token found in request');
-      
-      const { payload } = await jwtVerify(jwt, this.jwks, {
-        issuer: `https://${this.options.domain}`,
-        audience: this.options.clientID,
+    this.helper.process(req)
+      .then(this.claimsToUser.bind(this))
+      .then(this.success)
+      .catch(err => {
+        debug(err);
+        this.fail(err);
       });
-
-      return this.claimsToUser(payload);
-    }).then(this.success)
-    .catch(err => {
-      debug(err);
-      this.fail(err);
-    });
   }
 }
 
@@ -136,6 +128,58 @@ export class CriiptoVerifyExpressRedirect {
     res.redirect(logoutUrl.href);
   }
 
+  async handleCode(req: Request, redirectUri: string | undefined) {
+    if (req.query.error) {
+      throw new OAuth2Error(req.query.error as string, req.query.error_description as string | undefined, req.query.state as string | undefined);
+    }
+
+    if (req.query.code) {
+      const code = req.query.code as string;
+      if (!redirectUri) throw new Error('Bad session state');
+
+      const configuration = await this.configurationManager.fetch();
+      const codeResponse = await codeExchange(configuration, {
+        redirect_uri: redirectUri,
+        code,
+        client_secret: this.options.clientSecret
+      });
+
+      if ("error" in codeResponse) {
+        throw new OAuth2Error(codeResponse.error, codeResponse.error_description, codeResponse.state);
+      }
+      
+      const { payload } = await jwtVerify(codeResponse.id_token, this.jwks, {
+        issuer: `https://${this.options.domain}`,
+        audience: this.options.clientID,
+      });
+
+      return payload;
+    }
+
+    return null;
+  }
+
+  async authorizeURL(req: Request, returnTo?: string) {
+    const protocol = req.protocol;
+    const redirectUri =
+      new URL(this.options.redirectUri.startsWith('http') ? this.options.redirectUri : `${protocol}://${req.get('host')}${this.options.redirectUri}`);
+
+    if (returnTo) {
+      redirectUri.searchParams.set('returnTo', returnTo);
+    }
+    const configuration = await this.configurationManager.fetch();
+    const beforeAuthorize = this.options.beforeAuthorize ?? ((r, i) => i)
+    const authorizeUrl = buildAuthorizeURL(configuration, beforeAuthorize(req, {
+      scope: 'openid',
+      redirect_uri: redirectUri.href,
+      response_mode: 'query',
+      response_type: 'code'
+    }));
+    authorizeUrl.searchParams.set('criipto_sdk', CRIIPTO_SDK);
+
+    return {authorizeUrl, redirectUri};
+  }
+
   middleware(options?: {force?: boolean, failureRedirect?: string, successReturnToOrRedirect?: string}) {
     return (req: Request, res: Response, next: ((err?: Error) => {})) => {
       const strategyOptions = this.options as CriiptoVerifyRedirectOptions;
@@ -146,34 +190,16 @@ export class CriiptoVerifyExpressRedirect {
       Promise.resolve().then(async () => {
         const claimsJson = req.session.verifyClaims;
         if (claimsJson) {
-          const claims = JSON.parse(claimsJson);
+          const claims = JSON.parse(claimsJson) as JWTPayload;
           req.claims = claims;
           
           if (!force) {
             return next();
           }
         }
-
-        if (req.query.code) {
-          const redirectUri = req.session.verifyRedirectUri;
-          if (!redirectUri) throw new Error('Bad session state');
-
-          const code = req.query.code as string;
-          const configuration = await this.configurationManager.fetch();
-          const codeResponse = await codeExchange(configuration, {
-            redirect_uri: redirectUri,
-            code,
-            client_secret: strategyOptions.clientSecret
-          });
-
-          if ("error" in codeResponse) {
-            throw new OAuth2Error(codeResponse.error, codeResponse.error_description, codeResponse.state);
-          }
-          
-          const { payload } = await jwtVerify(codeResponse.id_token, this.jwks, {
-            issuer: `https://${this.options.domain}`,
-            audience: this.options.clientID,
-          });
+        
+        const payload = await this.handleCode(req, req.session.verifyRedirectUri);
+        if (payload) {
           req.claims = payload;
           req.session.verifyClaims = JSON.stringify(payload);
           req.session.touch();
@@ -184,25 +210,8 @@ export class CriiptoVerifyExpressRedirect {
           }
           return next();
         }
-        if (req.query.error) {
-          throw new OAuth2Error(req.query.error as string, req.query.error_description as string | undefined, req.query.state as string | undefined);
-        }
-        const protocol = req.protocol;
-        const redirectUri =
-          new URL(strategyOptions.redirectUri.startsWith('http') ? strategyOptions.redirectUri : `${protocol}://${req.get('host')}${strategyOptions.redirectUri}`);
 
-        if (req.url !== strategyOptions.redirectUri) {
-          redirectUri.searchParams.set('returnTo', req.url);
-        }
-        const configuration = await this.configurationManager.fetch();
-        const beforeAuthorize = strategyOptions.beforeAuthorize ?? ((r, i) => i)
-        const authorizeUrl = buildAuthorizeURL(configuration, beforeAuthorize(req, {
-          scope: 'openid',
-          redirect_uri: redirectUri.href,
-          response_mode: 'query',
-          response_type: 'code'
-        }));
-        authorizeUrl.searchParams.set('criipto_sdk', CRIIPTO_SDK);
+        const {authorizeUrl, redirectUri} = await this.authorizeURL(req, req.url !== strategyOptions.redirectUri ? undefined : req.url);
 
         req.session.verifyRedirectUri = redirectUri.href,
         req.session.touch();
@@ -258,39 +267,13 @@ export class CriiptoVerifyRedirectPassportStrategy implements passport.Strategy 
       const redirectUri =
         new URL(strategyOptions.redirectUri.startsWith('http') ? strategyOptions.redirectUri : `${protocol}://${req.get('host')}${strategyOptions.redirectUri}`);
 
-      if (req.query.code) {
-        const code = req.query.code as string;
-        const configuration = await this.configurationManager.fetch();
-        const codeResponse = await codeExchange(configuration, {
-          redirect_uri: redirectUri.href,
-          code,
-          client_secret: strategyOptions.clientSecret
-        });
-
-        if ("error" in codeResponse) {
-          throw new OAuth2Error(codeResponse.error, codeResponse.error_description, codeResponse.state);
-        }
-        
-        const { payload } = await jwtVerify(codeResponse.id_token, this.jwks, {
-          issuer: `https://${this.options.domain}`,
-          audience: this.options.clientID,
-        });
+      const payload = await this.helper.handleCode(req, redirectUri.href);
+      if (payload) {
         const user = await this.claimsToUser(payload);
         return this.success(user);
       }
-      if (req.query.error) {
-        throw new OAuth2Error(req.query.error as string, req.query.error_description as string | undefined, req.query.state as string | undefined);
-      }
 
-      const configuration = await this.configurationManager.fetch();
-      const beforeAuthorize = strategyOptions.beforeAuthorize ?? ((r, i) => i)
-      const authorizeUrl = buildAuthorizeURL(configuration, beforeAuthorize(req, {
-        scope: 'openid',
-        redirect_uri: redirectUri.href,
-        response_mode: 'query',
-        response_type: 'code'
-      }));
-      authorizeUrl.searchParams.set('criipto_sdk', CRIIPTO_SDK);
+      const {authorizeUrl} = await this.helper.authorizeURL(req, undefined);
 
       this.redirect(authorizeUrl.href);
     })

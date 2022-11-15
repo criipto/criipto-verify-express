@@ -54,7 +54,8 @@ const redirectPassport = new CriiptoVerifyRedirectPassportStrategy(
     beforeAuthorize(req, options) {
       return {
         ...options,
-        acr_values: req.query.acr_values
+        acr_values: req.query.acr_values,
+        prompt: req.query.prompt
       }
     }
   },
