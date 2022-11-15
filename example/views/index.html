@@ -1,0 +1,51 @@
+<html>
+  <head>
+    <script type="text/javascript" src="https://unpkg.com/@criipto/auth-js@3.5.1/dist/criipto-auth.umd.js"></script>
+    <script type="text/javascript">
+      const criiptoAuth = new CriiptoAuth({
+        domain: "samples.criipto.id",
+        clientID: "urn:my:application:identifier:9134",
+        store: sessionStorage
+      });
+
+      function spa(path) {
+        criiptoAuth.popup.authorize({
+            redirectUri: window.location.href,
+            prompt: 'login'
+        }).then(result => {
+          const jwt = result.id_token;
+
+          return fetch(path, {
+            headers: {
+              Authorization: `Bearer ${jwt}`
+            }
+          });
+        })
+        .then(response => response.json())
+        .then(payload => {
+          console.log(payload);
+          document.getElementById('response').innerText = JSON.stringify(payload, null, 2);
+        }).catch(err => {
+          console.error(err);
+          document.getElementById('response').innerText = JSON.stringify(err, null, 2);
+        });
+
+        return false;
+      }
+    </script>
+  </head>
+  <body>
+    <p>
+      Inspect the network console to follow along.
+    </p>
+    <ul>
+      <li>
+        <a href="/passport/redirect">Login with Passport + Redirect</a>
+      </li>
+      <li>
+        <a href="#" onclick="spa('/passport/jwt')">Login with Passport + JWT (using @criipto/auth-js)</a>
+      </li>
+    </ul>
+    <pre id="response"></pre>
+  </body>
+</html>

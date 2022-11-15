@@ -12,6 +12,9 @@
     "type": "git",
     "url": "git+https://github.com/criipto/criipto-verify-express.git"
   },
+  "engines" : { 
+    "node" : ">=14.0.0"
+  },
   "keywords": [
     "criipto",
     "verify",

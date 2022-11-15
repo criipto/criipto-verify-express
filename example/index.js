@@ -2,6 +2,7 @@ const express = require('express');
 const expressSesssion = require('express-session');
 const passport = require('passport');
 const CriiptoVerifyPassportStrategy = require('@criipto/verify-express').CriiptoVerifyPassportStrategy;
+const OAuth2Error = require('@criipto/verify-express').OAuth2Error;
 const app = express();
 const port = 3000;
 
@@ -18,6 +19,12 @@ app.use(
 );
 app.use(passport.initialize());
 app.use(passport.session());
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+passport.deserializeUser(function(user, done) {
+  done(null, user);
+});
 
 passport.use(
   'criiptoVerifyJwt',
@@ -26,6 +33,7 @@ passport.use(
     clientID: CRIIPTO_CLIENT_ID,
     mode: 'jwt'
   },
+  // Map claims to an express user
   async (jwtClaims) => {
     return jwtClaims;
   })
@@ -37,25 +45,27 @@ passport.use(
     clientID: CRIIPTO_CLIENT_ID,
     clientSecret: CRIIPTO_CLIENT_SECRET,
     mode: 'redirect',
+    // Should match an express route that is an allowed callback URL in your application
+    // This route should also have the authentication middleware applied.
     redirectUri: '/passport/redirect'
   },
+  // Map claims to an express user
   async (jwtClaims) => {
     return jwtClaims;
   })
 );
 app.use(passport.initialize());
 
-app.get('/', (req, res) => {
-  res.send('Hello World!')
-});
-
 app.get('/passport/jwt', passport.authenticate('criiptoVerifyJwt', { session: false }), (req, res) => {
+  res.json({
+    ...req.user,
+    passport: 'says hi'
+  });
+});
+app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {failureRedirect: '/error'}), (req, res) => {
   res.json(req.user);
 });
-app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {failureRedirect: '/loginerror'}), (req, res) => {
-  res.json(req.user);
-});
-app.get('/passport/protected', passport.authenticate('criiptoVerifyRedirect', {failureRedirect: '/loginerror'}), (req, res) => {
+app.get('/passport/protected', passport.authenticate('criiptoVerifyRedirect', {}), (req, res) => {
   res.json(req.user);
 });
 app.get('/protected', function (req, res, next) {
@@ -66,6 +76,17 @@ app.get('/protected', function (req, res, next) {
   next();
 }, (req, res) => {
   res.json(req.user);
+});
+
+app.get('/error', function (req, res, next) {
+  res.json({
+    error: req.query.error,
+    error_description: req.query.error_description,
+  });
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/views/index.html');
 });
 
 app.listen(port, () => {

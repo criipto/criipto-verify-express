@@ -1,6 +1,6 @@
 import './fetch-polyfill';
 import { Request } from 'express';
-import { buildAuthorizeURL, OpenIDConfigurationManager, codeExchange } from '@criipto/oidc';
+import { buildAuthorizeURL, OpenIDConfigurationManager, codeExchange, AuthorizeURLOptions } from '@criipto/oidc';
 import { ParamsDictionary } from 'express-serve-static-core';
 import passport from 'passport';
 import { ParsedQs } from 'qs';
@@ -9,34 +9,54 @@ import { CRIIPTO_SDK, extractBearerToken, memoryStorage } from './utils';
 
 const debug = require('debug')('@criipto/verify-express');
 
+export default class OAuth2Error extends Error {
+  error: string;
+  error_description?: string;
+  state?: string;
+
+  constructor(error: string, error_description?: string, state?: string) {
+    super(error + (error_description ? ` (${error_description})` : ''));
+    this.name = "OAuth2Error";
+    this.error = error;
+    this.error_description = error_description;
+    this.state = state;
+  }
+}
+
 export interface CriiptoVerifyJwtOptions {
-  // Whether or not the strategy should operate simply as an JWT-validator or if it should redirect to start a new session.
-  // Express sessions must be configured for 'redirect'
+  /**
+   * Whether or not the strategy should operate simply as an JWT-validator or if it should redirect to start a new session.
+   * Express sessions must be configured for 'redirect'
+   */
   mode: 'jwt'
   domain: string
   clientID: string
 }
 
 export interface CriiptoVerifyRedirectOptions {
-  // Whether or not the strategy should operate simply as an JWT-validator or if it should redirect to start a new session.
-  // Express sessions must be configured for 'redirect'
+  /**
+   * Whether or not the strategy should operate simply as an JWT-validator or if it should redirect to start a new session.
+   * Express sessions must be configured for 'redirect'
+   */
   mode: 'redirect'
   domain: string
   clientID: string
   clientSecret: string
-  // If no host is included, the current request host will be used.
+  /** If no host is included, the current request host will be used. */
   redirectUri: string
+  /** Modify authorize request if needed */
+  beforeAuthorize?: (req: Express.Request, options: AuthorizeURLOptions) => AuthorizeURLOptions
 }
 
 export type CriiptoVerifyOptions = CriiptoVerifyJwtOptions | CriiptoVerifyRedirectOptions;
 
 export class CriiptoVerifyPassportStrategy implements passport.Strategy  {
   options: CriiptoVerifyOptions
-  claimsToUser: (input: JWTPayload) => Express.User
+  claimsToUser: (input: JWTPayload) => Express.User | Promise<Express.User>
   jwks: ReturnType<typeof createRemoteJWKSet>
   configurationManager: OpenIDConfigurationManager
 
-  constructor(options: CriiptoVerifyOptions, claimsToUser: (input: JWTPayload) => Express.User) {
+  constructor(options: CriiptoVerifyOptions, claimsToUser: (input: JWTPayload) => Express.User | Promise<Express.User>) {
     this.options = options;
     this.claimsToUser = claimsToUser;
     this.jwks = createRemoteJWKSet(new URL(`https://${options.domain}/.well-known/jwks`));
@@ -46,14 +66,14 @@ export class CriiptoVerifyPassportStrategy implements passport.Strategy  {
   authenticate(
     this: passport.StrategyCreated<this, this & passport.StrategyCreatedStatic> & this,
     req: Request<ParamsDictionary, any, any, ParsedQs, Record<string, any>>,
-    options?: {force?: boolean}
+    options?: {force?: boolean, failureRedirect?: string}
   ) {
     if (this.options.mode === 'jwt') {
       Promise.resolve().then(async () => {
         const jwt = extractBearerToken(req);
         if (!jwt) throw new Error('No bearer token found in request');
         
-        const { payload, protectedHeader } = await jwtVerify(jwt, this.jwks, {
+        const { payload } = await jwtVerify(jwt, this.jwks, {
           issuer: `https://${this.options.domain}`,
           audience: this.options.clientID,
         });
@@ -81,19 +101,25 @@ export class CriiptoVerifyPassportStrategy implements passport.Strategy  {
         if (req.query.code) {
           const code = req.query.code as string;
           const configuration = await this.configurationManager.fetch();
-          const payload = await codeExchange(configuration, {
+          const codeResponse = await codeExchange(configuration, {
             redirect_uri: redirectUri.href,
             code,
             client_secret: strategyOptions.clientSecret
           });
 
-          if ("error" in payload) {
-            return this.redirect(`${returnTo}?error=${payload.error}&error_description=${payload.error_description}`)
+          if ("error" in codeResponse) {
+            throw new OAuth2Error(codeResponse.error, codeResponse.error_description, codeResponse.state);
           }
-          return this.fail();
+          
+          const { payload } = await jwtVerify(codeResponse.id_token, this.jwks, {
+            issuer: `https://${this.options.domain}`,
+            audience: this.options.clientID,
+          });
+          const user = await this.claimsToUser(payload);
+          return this.success(user);
         }
         if (req.query.error) {
-          return this.fail(req.query.error);
+          throw new OAuth2Error(req.query.error as string, req.query.error_description as string | undefined, req.query.state as string | undefined);
         }
 
         const configuration = await this.configurationManager.fetch();
@@ -101,20 +127,28 @@ export class CriiptoVerifyPassportStrategy implements passport.Strategy  {
         if (req.url !== strategyOptions.redirectUri) {
           redirectUri.searchParams.set('returnTo', req.url);
         }
-
-        const authorizeUrl = buildAuthorizeURL(configuration, {
+        
+        const beforeAuthorize = strategyOptions.beforeAuthorize ?? ((r, i) => i)
+        const authorizeUrl = buildAuthorizeURL(configuration, beforeAuthorize(req, {
           scope: 'openid',
           redirect_uri: redirectUri.href,
           response_mode: 'query',
           response_type: 'code'
-        });
+        }));
         authorizeUrl.searchParams.set('criipto_sdk', CRIIPTO_SDK);
 
         this.redirect(authorizeUrl.href);
       })
       .catch(err => {
         debug(err);
-        this.fail(err);
+        if (options.failureRedirect) {
+          if (err instanceof OAuth2Error) {
+            return this.redirect(`${options.failureRedirect}?error=${err.error}&error_description=${err.error_description || ''}&state=${err.state || ''}`)
+          }
+          return this.redirect(`${options.failureRedirect}?error=${err.toString()}`)
+        } else {
+          this.fail(err);
+        }
       });
     }
   }
