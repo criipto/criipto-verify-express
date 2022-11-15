@@ -18,6 +18,10 @@ If you do not have your client secret stored anywhere, make sure to enable Code 
 
 Below you will find examples for both Single-page application and Web-application use cases. You can also [download a full sample from GitHub](https://github.com/criipto/criipto-verify-express/blob/master/example)
 
+### Debugging
+
+`DEBUG=@criipto/verify-express*`
+
 ## Single-page application
 
 SPAs can utilize frontend frameworks like [@criipto/auth-js](https://www.npmjs.com/package/@criipto/auth-js) or [@criipto/verify-react](https://www.npmjs.com/package/@criipto/verify-react)

@@ -1,13 +1,14 @@
 import './fetch-polyfill';
-import { Request, Response } from 'express';
+import { NextFunction, Request, Response } from 'express';
 import { buildAuthorizeURL, OpenIDConfigurationManager, codeExchange, AuthorizeURLOptions, buildLogoutURL } from '@criipto/oidc';
 import { ParamsDictionary } from 'express-serve-static-core';
 import passport from 'passport';
 import { ParsedQs } from 'qs';
-import { createRemoteJWKSet, JWTPayload, jwtVerify } from 'jose';
+import { createRemoteJWKSet, JWTPayload, jwtVerify, errors } from 'jose';
 import { CRIIPTO_SDK, extractBearerToken, memoryStorage } from './utils';
 
 const debug = require('debug')('@criipto/verify-express');
+const errorDebug = require('debug')('@criipto/verify-express:error');
 
 export default class OAuth2Error extends Error {
   error: string;
@@ -53,20 +54,33 @@ export class CriiptoVerifyExpressJwt {
 
   async process(req: Request) {
     const jwt = extractBearerToken(req);
-    if (!jwt) throw new Error('No bearer token found in request');
+    if (!jwt) return null;
     
-    const { payload } = await jwtVerify(jwt, this.jwks, {
-      issuer: `https://${this.options.domain}`,
-      audience: this.options.clientID,
-    });
+    try {
+      const { payload } = await jwtVerify(jwt, this.jwks, {
+        issuer: `https://${this.options.domain}`,
+        audience: this.options.clientID,
+      });
 
-    return payload;
+      return payload;
+    } catch (err) {
+      errorDebug(`Error verifying JWT: ${err.toString()}`);
+      if (err instanceof errors.JWTClaimValidationFailed || err instanceof errors.JWSInvalid || err instanceof errors.JWTInvalid) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   middleware() {
-    return (req: Request, res: Response, next: ((err?: Error) => {})) => {
-      this.process(req).then(() => {
-        next();
+    return (req: Request, res: Response, next: NextFunction) => {
+      this.process(req).then((payload) => {
+        if (payload) {
+          req.claims = payload;
+          next();
+          return;
+        }
+        return res.sendStatus(401);
       })
       .catch(err => {
         debug(err);
