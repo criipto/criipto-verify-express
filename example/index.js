@@ -68,8 +68,6 @@ passport.use(
   'criiptoVerifyRedirect',
   redirectPassport
 );
-app.use(passport.initialize());
-
 app.get('/passport/jwt', passport.authenticate('criiptoVerifyJwt', { session: false }), (req, res) => {
   res.json({
     ...req.user,
