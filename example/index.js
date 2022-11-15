@@ -1,7 +1,8 @@
 const express = require('express');
 const expressSesssion = require('express-session');
 const passport = require('passport');
-const CriiptoVerifyPassportStrategy = require('@criipto/verify-express').CriiptoVerifyPassportStrategy;
+const CriiptoVerifyJwtPassportStrategy = require('@criipto/verify-express').CriiptoVerifyJwtPassportStrategy;
+const CriiptoVerifyRedirectPassportStrategy = require('@criipto/verify-express').CriiptoVerifyRedirectPassportStrategy;
 const CriiptoVerifyExpressJwt = require('@criipto/verify-express').CriiptoVerifyExpressJwt;
 const app = express();
 const port = 3000;
@@ -28,26 +29,25 @@ passport.deserializeUser(function(user, done) {
 
 passport.use(
   'criiptoVerifyJwt',
-  new CriiptoVerifyPassportStrategy({
+  new CriiptoVerifyJwtPassportStrategy({
     domain: CRIIPTO_DOMAIN,
-    clientID: CRIIPTO_CLIENT_ID,
-    mode: 'jwt'
+    clientID: CRIIPTO_CLIENT_ID
   },
   // Map claims to an express user
   async (jwtClaims) => {
     return jwtClaims;
   })
 );
-passport.use(
-  'criiptoVerifyRedirect',
-  new CriiptoVerifyPassportStrategy({
+
+const redirectPassport = new CriiptoVerifyRedirectPassportStrategy(
+  {
     domain: CRIIPTO_DOMAIN,
     clientID: CRIIPTO_CLIENT_ID,
     clientSecret: CRIIPTO_CLIENT_SECRET,
-    mode: 'redirect',
     // Should match an express route that is an allowed callback URL in your application
     // This route should also have the authentication middleware applied.
     redirectUri: '/passport/redirect',
+    postLogoutRedirectUri: '/',
 
     // Ammend authorize request if you wish
     beforeAuthorize(req, options) {
@@ -60,7 +60,11 @@ passport.use(
   // Map claims to an express user
   async (jwtClaims) => {
     return jwtClaims;
-  })
+  }
+);
+passport.use(
+  'criiptoVerifyRedirect',
+  redirectPassport
 );
 app.use(passport.initialize());
 
@@ -70,11 +74,14 @@ app.get('/passport/jwt', passport.authenticate('criiptoVerifyJwt', { session: fa
     passport: 'says hi'
   });
 });
-app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {failureRedirect: '/error'}), (req, res) => {
+app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {failureRedirect: '/error', successReturnToOrRedirect: '/passport/protected'}), (req, res) => {
   res.json(req.user);
 });
 app.get('/passport/protected', passport.authenticate('criiptoVerifyRedirect', {}), (req, res) => {
   res.json(req.user);
+});
+app.get('/passport/logout', (req, res) => {
+  redirectPassport.logout(req, res);
 });
 
 const expressJwt = new CriiptoVerifyExpressJwt({
