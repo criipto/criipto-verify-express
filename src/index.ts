@@ -83,7 +83,7 @@ export class CriiptoVerifyExpressJwt {
         return res.sendStatus(401);
       })
       .catch(err => {
-        debug(err);
+        errorDebug(err);
         next(err);
       });
     };
@@ -232,7 +232,7 @@ export class CriiptoVerifyExpressRedirect {
         res.redirect(authorizeUrl.href);
       })
       .catch(err => {
-        debug(err);
+        errorDebug(err);
         const failureRedirect = options.failureRedirect ?? '/';
         if (err instanceof OAuth2Error) {
           return res.redirect(`${failureRedirect}?error=${err.error}&error_description=${err.error_description || ''}&state=${err.state || ''}`)
@@ -292,7 +292,7 @@ export class CriiptoVerifyRedirectPassportStrategy implements passport.Strategy 
       this.redirect(authorizeUrl.href);
     })
     .catch(err => {
-      debug(err);
+      errorDebug(err);
       if (options.failureRedirect) {
         if (err instanceof OAuth2Error) {
           return this.redirect(`${options.failureRedirect}?error=${err.error}&error_description=${err.error_description || ''}&state=${err.state || ''}`)
