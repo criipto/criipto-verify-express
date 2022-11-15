@@ -2,7 +2,7 @@ const express = require('express');
 const expressSesssion = require('express-session');
 const passport = require('passport');
 const CriiptoVerifyPassportStrategy = require('@criipto/verify-express').CriiptoVerifyPassportStrategy;
-const OAuth2Error = require('@criipto/verify-express').OAuth2Error;
+const CriiptoVerifyExpressJwt = require('@criipto/verify-express').CriiptoVerifyExpressJwt;
 const app = express();
 const port = 3000;
 
@@ -47,7 +47,15 @@ passport.use(
     mode: 'redirect',
     // Should match an express route that is an allowed callback URL in your application
     // This route should also have the authentication middleware applied.
-    redirectUri: '/passport/redirect'
+    redirectUri: '/passport/redirect',
+
+    // Ammend authorize request if you wish
+    beforeAuthorize(req, options) {
+      return {
+        ...options,
+        acr_values: req.query.acr_values
+      }
+    }
   },
   // Map claims to an express user
   async (jwtClaims) => {
@@ -68,14 +76,16 @@ app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {fa
 app.get('/passport/protected', passport.authenticate('criiptoVerifyRedirect', {}), (req, res) => {
   res.json(req.user);
 });
-app.get('/protected', function (req, res, next) {
-  if (!req.isAuthenticated()) {
-    res.json({}, 401);
-    return;
-  }
-  next();
-}, (req, res) => {
-  res.json(req.user);
+
+const expressJwt = new CriiptoVerifyExpressJwt({
+  domain: CRIIPTO_DOMAIN,
+  clientID: CRIIPTO_CLIENT_ID
+});
+app.get('/plain/jwt', expressJwt.middleware(), (req, res) => {
+  res.json({
+    ...req.claims,
+    express: 'says hi'
+  });
 });
 
 app.get('/error', function (req, res, next) {

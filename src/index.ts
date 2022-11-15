@@ -1,5 +1,5 @@
 import './fetch-polyfill';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { buildAuthorizeURL, OpenIDConfigurationManager, codeExchange, AuthorizeURLOptions } from '@criipto/oidc';
 import { ParamsDictionary } from 'express-serve-static-core';
 import passport from 'passport';
@@ -45,10 +45,44 @@ export interface CriiptoVerifyRedirectOptions {
   /** If no host is included, the current request host will be used. */
   redirectUri: string
   /** Modify authorize request if needed */
-  beforeAuthorize?: (req: Express.Request, options: AuthorizeURLOptions) => AuthorizeURLOptions
+  beforeAuthorize?: (req: Request, options: AuthorizeURLOptions) => AuthorizeURLOptions
 }
 
 export type CriiptoVerifyOptions = CriiptoVerifyJwtOptions | CriiptoVerifyRedirectOptions;
+
+export class CriiptoVerifyExpressJwt {
+  options: Omit<CriiptoVerifyOptions, 'mode'>
+  jwks: ReturnType<typeof createRemoteJWKSet>
+  configurationManager: OpenIDConfigurationManager
+
+  constructor(options: Omit<CriiptoVerifyOptions, 'mode'>) {
+    this.options = options;
+    this.jwks = createRemoteJWKSet(new URL(`https://${options.domain}/.well-known/jwks`));
+    this.configurationManager = new OpenIDConfigurationManager(`https://${options.domain}`, options.clientID, memoryStorage);
+  }
+
+  middleware() {
+    return (req: Request, res: Response, next: ((err?: Error) => {})) => {
+      Promise.resolve().then(async () => {
+        const jwt = extractBearerToken(req);
+        if (!jwt) throw new Error('No bearer token found in request');
+        
+        const { payload } = await jwtVerify(jwt, this.jwks, {
+          issuer: `https://${this.options.domain}`,
+          audience: this.options.clientID,
+        });
+
+        req.claims = payload;
+      }).then(() => {
+        next();
+      })
+      .catch(err => {
+        debug(err);
+        next(err);
+      });
+    };
+  }
+}
 
 export class CriiptoVerifyPassportStrategy implements passport.Strategy  {
   options: CriiptoVerifyOptions
