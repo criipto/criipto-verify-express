@@ -12,8 +12,8 @@
     "type": "git",
     "url": "git+https://github.com/criipto/criipto-verify-express.git"
   },
-  "engines" : { 
-    "node" : ">=14.0.0"
+  "engines": {
+    "node": ">=14.0.0"
   },
   "keywords": [
     "criipto",
@@ -38,6 +38,7 @@
     "passport-strategy": "^1.0.0"
   },
   "devDependencies": {
+    "@types/express-session": "^1.17.5",
     "@types/node-fetch": "^2.6.2",
     "@types/passport-strategy": "^0.2.35",
     "typescript": "^4.7.4"

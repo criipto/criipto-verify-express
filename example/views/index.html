@@ -43,16 +43,27 @@
         <a href="/passport/redirect">Login with Passport + Redirect</a>
       </li>
       <li>
+        <a href="#" onclick="spa('/passport/jwt')">Login with Passport + JWT (using @criipto/auth-js)</a>
+      </li>
+      <li>
         <a href="/passport/protected">Access Passport (redirect) protected route</a>
       </li>
       <li>
         <a href="/passport/logout">Logout with Passport</a>
       </li>
-      <li>
-        <a href="#" onclick="spa('/passport/jwt')">Login with Passport + JWT (using @criipto/auth-js)</a>
-      </li>
+    </ul>
+    <ul>
       <li>
         <a href="#" onclick="spa('/plain/jwt')">Login with plain Express + JWT (using @criipto/auth-js)</a>
+      </li>
+      <li>
+        <a href="/plain/redirect">Login with plain Express + Redirect</a>
+      </li>
+      <li>
+        <a href="/plain/protected">Access plain Express (redirect) protected route</a>
+      </li>
+      <li>
+        <a href="/plain/logout">Logout with plain Express</a>
       </li>
     </ul>
     <pre id="response"></pre>

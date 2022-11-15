@@ -4,6 +4,7 @@ const passport = require('passport');
 const CriiptoVerifyJwtPassportStrategy = require('@criipto/verify-express').CriiptoVerifyJwtPassportStrategy;
 const CriiptoVerifyRedirectPassportStrategy = require('@criipto/verify-express').CriiptoVerifyRedirectPassportStrategy;
 const CriiptoVerifyExpressJwt = require('@criipto/verify-express').CriiptoVerifyExpressJwt;
+const CriiptoVerifyExpressRedirect = require('@criipto/verify-express').CriiptoVerifyExpressRedirect;
 const app = express();
 const port = 3000;
 
@@ -80,9 +81,7 @@ app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {fa
 app.get('/passport/protected', passport.authenticate('criiptoVerifyRedirect', {}), (req, res) => {
   res.json(req.user);
 });
-app.get('/passport/logout', (req, res) => {
-  redirectPassport.logout(req, res);
-});
+app.get('/passport/logout', redirectPassport.logout.bind(redirectPassport));
 
 const expressJwt = new CriiptoVerifyExpressJwt({
   domain: CRIIPTO_DOMAIN,
@@ -94,6 +93,33 @@ app.get('/plain/jwt', expressJwt.middleware(), (req, res) => {
     express: 'says hi'
   });
 });
+
+const expressRedirect = new CriiptoVerifyExpressRedirect({
+  domain: CRIIPTO_DOMAIN,
+  clientID: CRIIPTO_CLIENT_ID,
+  clientSecret: CRIIPTO_CLIENT_SECRET,
+  // Should match an express route that is an allowed callback URL in your application
+  // This route should also have the authentication middleware applied.
+  redirectUri: '/plain/redirect',
+  postLogoutRedirectUri: '/',
+
+  // Ammend authorize request if you wish
+  beforeAuthorize(req, options) {
+    return {
+      ...options,
+      acr_values: req.query.acr_values,
+      prompt: req.query.prompt
+    }
+  }
+});
+app.get('/plain/redirect', expressRedirect.middleware({failureRedirect: '/error', successReturnToOrRedirect: '/plain/protected'}), (req, res) => {
+  res.json(req.claims);
+});
+app.get('/plain/protected', expressRedirect.middleware({}), (req, res) => {
+  res.json(req.claims);
+});
+
+app.get('/plain/logout', expressRedirect.logout.bind(expressRedirect));
 
 app.get('/error', function (req, res, next) {
   res.json({
