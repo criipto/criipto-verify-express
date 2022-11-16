@@ -9,6 +9,7 @@ import { CRIIPTO_SDK, extractBearerToken, memoryStorage } from './utils';
 
 const debug = require('debug')('@criipto/verify-express');
 const errorDebug = require('debug')('@criipto/verify-express:error');
+const clockTolerance = 5 * 60;
 
 export default class OAuth2Error extends Error {
   error: string;
@@ -60,6 +61,7 @@ export class CriiptoVerifyExpressJwt {
       const { payload } = await jwtVerify(jwt, this.jwks, {
         issuer: `https://${this.options.domain}`,
         audience: this.options.clientID,
+        clockTolerance
       });
 
       return payload;
@@ -165,6 +167,7 @@ export class CriiptoVerifyExpressRedirect {
       const { payload } = await jwtVerify(codeResponse.id_token, this.jwks, {
         issuer: `https://${this.options.domain}`,
         audience: this.options.clientID,
+        clockTolerance
       });
 
       return payload;
