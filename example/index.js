@@ -75,10 +75,16 @@ app.get('/passport/jwt', passport.authenticate('criiptoVerifyJwt', { session: fa
   });
 });
 app.get('/passport/redirect', passport.authenticate('criiptoVerifyRedirect', {failureRedirect: '/error', successReturnToOrRedirect: '/passport/protected'}), (req, res) => {
-  res.json(req.user);
+  res.json({
+    user: req.user,
+    home: `${req.protocol}://${req.get('host')}/`
+  });
 });
 app.get('/passport/protected', passport.authenticate('criiptoVerifyRedirect', {}), (req, res) => {
-  res.json(req.user);
+  res.json({
+    user: req.user,
+    home: `${req.protocol}://${req.get('host')}/`
+  });
 });
 app.get('/passport/logout', redirectPassport.logout.bind(redirectPassport));
 
@@ -112,10 +118,16 @@ const expressRedirect = new CriiptoVerifyExpressRedirect({
   }
 });
 app.get('/plain/redirect', expressRedirect.middleware({failureRedirect: '/error', successReturnToOrRedirect: '/plain/protected'}), (req, res) => {
-  res.json(req.claims);
+  res.json({
+    claims: req.claims,
+    home: `${req.protocol}://${req.get('host')}/`
+  });
 });
 app.get('/plain/protected', expressRedirect.middleware({}), (req, res) => {
-  res.json(req.claims);
+  res.json({
+    claims: req.claims,
+    home: `${req.protocol}://${req.get('host')}/`
+  });
 });
 
 app.get('/plain/logout', expressRedirect.logout.bind(expressRedirect));
