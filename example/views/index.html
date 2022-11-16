@@ -27,7 +27,7 @@
               throw new Error(response.status + ': '+text);
             });
           }
-          return respomse
+          return response;
         })
         .then(response => response.json())
         .then(payload => {
@@ -44,7 +44,7 @@
   </head>
   <body>
     <p>
-      Inspect the network console to follow along.
+      Inspect the network console to follow along (if testing MitID, you need to disable breakpoints in your javascript console).
     </p>
     <ul>
       <li>
