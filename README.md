@@ -22,91 +22,6 @@ Below you will find examples for both Single-page application and Web-applicatio
 
 `DEBUG=@criipto/verify-express*`
 
-## Single-page application
-
-SPAs can utilize frontend frameworks like [@criipto/auth-js](https://www.npmjs.com/package/@criipto/auth-js) or [@criipto/verify-react](https://www.npmjs.com/package/@criipto/verify-react)
-to handle the login in the frontend and then send a Bearer token to their API.
-
-You must register a Callback URL on your Criipto Application matching the `href` of the URL you are triggering SPA login from.
-
-### Passport
-
-```js
-// server.js
-const express = require('express');
-const passport = require('passport');
-const CriiptoVerifyJwtPassportStrategy = require('@criipto/verify-express').CriiptoVerifyJwtPassportStrategy;
-
-const app = express();
-
-app.use(passport.initialize());
-passport.serializeUser(function(user, done) {
-  done(null, user);
-});
-passport.deserializeUser(function(user, done) {
-  done(null, user);
-});
-
-passport.use(
-  'criiptoVerifyJwt',
-  new CriiptoVerifyJwtPassportStrategy({
-    domain: "{{YOUR_CRIIPTO_DOMAIN}}",
-    clientID: "{{YOUR_CLIENT_ID}}"
-  },
-  // Map claims to an express user
-  async (jwtClaims) => {
-    return jwtClaims;
-  })
-);
-
-app.get('/jwt-protected-route', passport.authenticate('criiptoVerifyJwt', { session: false }), (req, res) => {
-  res.json({
-    ...req.user,
-    passport: 'says hi'
-  });
-});
-
-// client.js
-const {id_token} = login();
-
-fetch(`{server}/jwt-protected-route`, {
-  headers: {
-    Authorization: `Bearer ${id_token}`
-  }
-})
-```
-
-### Plain express
-
-```js
-// server.js
-
-const express = require('express');
-const CriiptoVerifyExpressJwt = require('@criipto/verify-express').CriiptoVerifyExpressJwt;
-const app = express();
-
-const expressJwt = new CriiptoVerifyExpressJwt({
-  domain: "{{YOUR_CRIIPTO_DOMAIN}}",
-  clientID: "{{YOUR_CLIENT_ID}}"
-});
-
-app.get('/jwt-protected-route', expressJwt.middleware(), (req, res) => {
-  res.json({
-    ...req.user,
-    express: 'says hi'
-  });
-});
-
-// client.js
-const {id_token} = login();
-
-fetch(`{server}/jwt-protected-route`, {
-  headers: {
-    Authorization: `Bearer ${id_token}`
-  }
-})
-```
-
 ## Web-application with sessions and redirect.
 
 Sessions must be setup when using redirect based authentication.
@@ -222,4 +137,89 @@ app.get('/error', function (req, res, next) {
     error_description: req.query.error_description,
   });
 });
+```
+
+## Single-page application
+
+SPAs can utilize frontend frameworks like [@criipto/auth-js](https://www.npmjs.com/package/@criipto/auth-js) or [@criipto/verify-react](https://www.npmjs.com/package/@criipto/verify-react)
+to handle the login in the frontend and then send a Bearer token to their API.
+
+You must register a Callback URL on your Criipto Application matching the `href` of the URL you are triggering SPA login from.
+
+### Passport
+
+```js
+// server.js
+const express = require('express');
+const passport = require('passport');
+const CriiptoVerifyJwtPassportStrategy = require('@criipto/verify-express').CriiptoVerifyJwtPassportStrategy;
+
+const app = express();
+
+app.use(passport.initialize());
+passport.serializeUser(function(user, done) {
+  done(null, user);
+});
+passport.deserializeUser(function(user, done) {
+  done(null, user);
+});
+
+passport.use(
+  'criiptoVerifyJwt',
+  new CriiptoVerifyJwtPassportStrategy({
+    domain: "{{YOUR_CRIIPTO_DOMAIN}}",
+    clientID: "{{YOUR_CLIENT_ID}}"
+  },
+  // Map claims to an express user
+  async (jwtClaims) => {
+    return jwtClaims;
+  })
+);
+
+app.get('/jwt-protected-route', passport.authenticate('criiptoVerifyJwt', { session: false }), (req, res) => {
+  res.json({
+    ...req.user,
+    passport: 'says hi'
+  });
+});
+
+// client.js
+const {id_token} = login();
+
+fetch(`{server}/jwt-protected-route`, {
+  headers: {
+    Authorization: `Bearer ${id_token}`
+  }
+})
+```
+
+### Plain express
+
+```js
+// server.js
+
+const express = require('express');
+const CriiptoVerifyExpressJwt = require('@criipto/verify-express').CriiptoVerifyExpressJwt;
+const app = express();
+
+const expressJwt = new CriiptoVerifyExpressJwt({
+  domain: "{{YOUR_CRIIPTO_DOMAIN}}",
+  clientID: "{{YOUR_CLIENT_ID}}"
+});
+
+app.get('/jwt-protected-route', expressJwt.middleware(), (req, res) => {
+  res.json({
+    ...req.user,
+    express: 'says hi'
+  });
+});
+
+// client.js
+const {id_token} = login();
+
+fetch(`{server}/jwt-protected-route`, {
+  headers: {
+    Authorization: `Bearer ${id_token}`
+  }
+})
 ```
