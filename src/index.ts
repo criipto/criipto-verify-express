@@ -238,9 +238,9 @@ export class CriiptoVerifyExpressRedirect {
         errorDebug(err);
         const failureRedirect = options.failureRedirect ?? '/';
         if (err instanceof OAuth2Error) {
-          return res.redirect(`${failureRedirect}?error=${err.error}&error_description=${err.error_description || ''}&state=${err.state || ''}`)
+          return res.redirect(`${failureRedirect}?error=${encodeURIComponent(err.error)}&error_description=${encodeURIComponent(err.error_description || '')}&state=${err.state || ''}`)
         }
-        return res.redirect(`${failureRedirect}?error=${err.toString()}`)
+        return res.redirect(`${failureRedirect}?error=${encodeURIComponent(err.toString())}`)
       });
     };
   }
@@ -298,9 +298,9 @@ export class CriiptoVerifyRedirectPassportStrategy implements passport.Strategy 
       errorDebug(err);
       if (options.failureRedirect) {
         if (err instanceof OAuth2Error) {
-          return this.redirect(`${options.failureRedirect}?error=${err.error}&error_description=${err.error_description || ''}&state=${err.state || ''}`)
+          return this.redirect(`${options.failureRedirect}?error=${encodeURIComponent(err.error)}&error_description=${encodeURIComponent(err.error_description || '')}&state=${err.state || ''}`)
         }
-        return this.redirect(`${options.failureRedirect}?error=${err.toString()}`)
+        return this.redirect(`${options.failureRedirect}?error=${encodeURIComponent(err.toString())}`)
       } else {
         this.fail(err);
       }
