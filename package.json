@@ -1,6 +1,6 @@
 {
   "name": "@criipto/verify-express",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Accept MitID, NemID, Swedish BankID, Norwegian BankID and more logins in your Node.js app using Passport or plain Express.js",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
